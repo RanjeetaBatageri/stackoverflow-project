@@ -264,7 +264,7 @@ const QuestionDetail = ({ questionId }: any) => {
         const matchedquestion = res.data.data.find(
           (u: any) => u._id === questionId
         );
-        setanswer(matchedquestion.answer);
+        setanswer(matchedquestion?.answer || []);
         setquestion(matchedquestion);
       } catch (error) {
         console.log(error);
@@ -563,11 +563,11 @@ const QuestionDetail = ({ questionId }: any) => {
       </Card>
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-6 text-gray-900">
-          {question.answer.length} Answer
-          {question.answer.length !== 1 ? "s" : ""}
+          {(question.answer?.length || 0)} Answer
+          {(question.answer?.length || 0) !== 1 ? "s" : ""}
         </h2>
         <div className="space-y-6">
-          {question.answer.map((ans: any) => (
+          {(question.answer || []).map((ans: any) => (
             <Card key={ans._id} className={""}>
               <CardContent className="p-0">
                 <div className="flex flex-col sm:flex-row">

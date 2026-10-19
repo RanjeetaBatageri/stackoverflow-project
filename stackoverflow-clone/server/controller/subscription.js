@@ -54,7 +54,7 @@ export const createOrder = async (req, res) => {
       total_count: 12, // 12 monthly recurring cycles
       notes: { userId: userId.toString(), plan: requestedPlan },
     });
-    const razorpaySubscriptionId = razorpaySub.id;
+    razorpaySubscriptionId = razorpaySub.id;
 
     // Record initial payment intent
     const newPayment = await Payment.create({

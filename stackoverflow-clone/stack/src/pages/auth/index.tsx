@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState } from "react";
 import { toast } from "react-toastify";
+import axiosInstance from "@/lib/axiosinstance";
 
 const index = () => {
   const router = useRouter();
@@ -21,6 +22,10 @@ const index = () => {
   const handleChange = (e: any) => {
     setform({ ...form, [e.target.id]: e.target.value });
   };
+  const [deviceChallenge, setDeviceChallenge] = useState<any>(null);
+  const [deviceOtp, setDeviceOtp] = useState("");
+  const [verifyingDevice, setVerifyingDevice] = useState(false);
+
   const handlesubmit = async (e: any) => {
     e.preventDefault();
     if (!form.email || !form.password) {
@@ -28,10 +33,42 @@ const index = () => {
       return;
     }
     try {
-      await Login(form);
-      router.push("/");
+      const res = await Login(form);
+      if (res?.requiresDeviceOtp) {
+        setDeviceChallenge(res);
+      } else {
+        router.push("/");
+      }
     } catch (error) {
       console.log(error);
+    }
+  };
+
+  const handleVerifyDeviceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deviceChallenge || !deviceOtp.trim()) return;
+    setVerifyingDevice(true);
+
+    try {
+      const res = await axiosInstance.post("/user/verify-device-otp", {
+        userId: deviceChallenge.userId,
+        otp: deviceOtp.trim(),
+        deviceFingerprint: deviceChallenge.deviceFingerprint,
+        browser: deviceChallenge.browser,
+        os: deviceChallenge.os,
+        deviceType: deviceChallenge.deviceType,
+        markTrusted: true,
+      });
+
+      const { data, token, sessionId } = res.data;
+      const userData = { ...data, token, sessionId };
+      localStorage.setItem("user", JSON.stringify(userData));
+      toast.success("New device verified & trusted!");
+      window.location.href = "/";
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Device OTP verification failed");
+    } finally {
+      setVerifyingDevice(false);
     }
   };
   return (
@@ -142,7 +179,7 @@ const index = () => {
                 {loading ? "loading" : "Log in"}
               </Button>
               <div className="text-center text-sm">
-                <Link href="#" className="text-blue-600 hover:underline">
+                <Link href="/forgot-password" className="text-blue-600 hover:underline">
                   Forgot your password?
                 </Link>
               </div>
@@ -156,6 +193,59 @@ const index = () => {
           </Card>
         </form>
       </div>
+
+      {deviceChallenge && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-gray-900">
+              Unrecognized Device Detected
+            </h3>
+            <p className="text-sm text-gray-600">
+              {deviceChallenge.message} An OTP code has been sent to your registered email.
+            </p>
+
+            {deviceChallenge.demoOtp && (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 font-mono">
+                Demo Device OTP: {deviceChallenge.demoOtp}
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyDeviceSubmit} className="space-y-3">
+              <div>
+                <Label htmlFor="deviceOtp" className="text-xs font-semibold">
+                  6-Digit Device Verification Code
+                </Label>
+                <Input
+                  id="deviceOtp"
+                  type="text"
+                  placeholder="Enter OTP"
+                  value={deviceOtp}
+                  onChange={(e) => setDeviceOtp(e.target.value)}
+                  className="font-mono tracking-widest mt-1"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeviceChallenge(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={verifyingDevice}
+                  className="bg-blue-600 hover:bg-blue-700 text-sm"
+                >
+                  {verifyingDevice ? "Verifying..." : "Verify & Trust Device"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

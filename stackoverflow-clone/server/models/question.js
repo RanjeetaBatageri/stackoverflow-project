@@ -19,6 +19,7 @@ const questionschema = mongoose.Schema(
         answeredon: { type: Date, default: Date.now },
       },
     ],
+    acceptedAnswerId: { type: String },
   },
   { timestamp: true }
 );

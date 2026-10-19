@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import Mainlayout from "@/layout/Mainlayout";
 import axiosInstance from "@/lib/axiosinstance";
+import { useLanguage } from "@/lib/LanguageContext";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
@@ -68,6 +69,7 @@ const questions = [
   },
 ];
 export default function Home() {
+  const { t } = useLanguage();
   const [question, setquestion] = useState<any>(null);
   const [loading, setloading] = useState(true);
   const router = useRouter();
@@ -103,12 +105,12 @@ export default function Home() {
     <Mainlayout>
       <main className="min-w-0 p-4 lg:p-6 ">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-          <h1 className="text-xl lg:text-2xl font-semibold">Top Questions</h1>
+          <h1 className="text-xl lg:text-2xl font-semibold">{t("allQuestions")}</h1>
           <button
             onClick={() => router.push("/ask")}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium whitespace-nowrap"
           >
-            Ask Question
+            {t("askQuestion")}
           </button>
         </div>
         <div className="w-full">

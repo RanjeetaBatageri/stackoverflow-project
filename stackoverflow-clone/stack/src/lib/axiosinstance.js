@@ -24,4 +24,21 @@ axiosInstance.interceptors.request.use((req) => {
   return req;
 });
 
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      if (typeof window !== "undefined") {
+        const currentUser = localStorage.getItem("user");
+        if (currentUser) {
+          localStorage.removeItem("user");
+          window.dispatchEvent(new Event("auth-logout"));
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default axiosInstance;
+

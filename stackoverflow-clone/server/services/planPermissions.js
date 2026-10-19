@@ -30,26 +30,35 @@ export const canAskQuestion = (user, questionsAskedToday) => {
   };
 };
 
-export const checkAndIncrementQuestionLimit = async (userId) => {
+export const checkQuestionLimit = async (userId) => {
   const user = await User.findById(userId);
   if (!user) {
     return { allowed: false, error: "User not found" };
   }
 
   const today = new Date();
-  const todayStr = today.toISOString().split("T")[0]; // YYYY-MM-DD UTC date boundary
+  const todayStr = today.toISOString().split("T")[0];
 
   let usedToday = user.dailyQuestionCount || 0;
-  let lastDateStr = user.lastQuestionDate ? new Date(user.lastQuestionDate).toISOString().split("T")[0] : null;
+  const lastDateStr = user.lastQuestionDate
+    ? new Date(user.lastQuestionDate).toISOString().split("T")[0]
+    : null;
 
   if (lastDateStr !== todayStr) {
     usedToday = 0;
   }
 
   const check = canAskQuestion(user, usedToday);
+
   if (!check.allowed) {
     const activePlan = getEffectivePlan(user);
-    const recommendedPlan = activePlan === "free" ? "bronze" : activePlan === "bronze" ? "silver" : "gold";
+    const recommendedPlan =
+      activePlan === "free"
+        ? "bronze"
+        : activePlan === "bronze"
+          ? "silver"
+          : "gold";
+
     return {
       allowed: false,
       limit: check.limit,
@@ -61,18 +70,56 @@ export const checkAndIncrementQuestionLimit = async (userId) => {
     };
   }
 
-  // Increment question count
-  user.dailyQuestionCount = usedToday + 1;
-  user.lastQuestionDate = today;
-  await user.save();
-
   return {
     allowed: true,
     limit: check.limit,
-    used: usedToday + 1,
-    remaining: check.limit === -1 ? "unlimited" : Math.max(0, check.limit - (usedToday + 1)),
+    used: usedToday,
+    remaining:
+      check.limit === -1
+        ? "unlimited"
+        : Math.max(0, check.limit - usedToday),
   };
 };
+
+export const incrementQuestionLimit = async (userId) => {
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
+
+  const user = await User.findById(userId);
+  if (!user) return;
+
+  const lastDateStr = user.lastQuestionDate
+    ? new Date(user.lastQuestionDate).toISOString().split("T")[0]
+    : null;
+
+  if (lastDateStr !== todayStr) {
+    // Reset count for new day atomically
+    await User.findByIdAndUpdate(userId, {
+      dailyQuestionCount: 1,
+      lastQuestionDate: today,
+    });
+  } else {
+    // Increment existing count for today atomically
+    await User.findByIdAndUpdate(userId, {
+      $inc: { dailyQuestionCount: 1 },
+      lastQuestionDate: today,
+    });
+  }
+};
+
+export const checkAndIncrementQuestionLimit = async (userId) => {
+  const check = await checkQuestionLimit(userId);
+  if (!check.allowed) {
+    return check;
+  }
+  await incrementQuestionLimit(userId);
+  return {
+    ...check,
+    used: check.used + 1,
+    remaining: check.limit === -1 ? "unlimited" : Math.max(0, check.limit - (check.used + 1)),
+  };
+};
+
 
 export const canUseAdvancedSearch = (user) => {
   const search = getPlanLimits(user).search;

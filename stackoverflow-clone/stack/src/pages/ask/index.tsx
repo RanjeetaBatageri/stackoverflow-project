@@ -11,12 +11,22 @@ import LimitExceededModal from "@/components/subscription/LimitExceededModal";
 import PlanBadge from "@/components/subscription/PlanBadge";
 import { Plus, X, AlertCircle } from "lucide-react";
 import { useRouter } from "next/router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
 const AskQuestionIndex = () => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const router = useRouter();
   const { user, subscription, fetchSubscription } = useAuth();
+  useEffect(() => {
+    if (mounted && !user) {
+      router.push("/auth");
+    }
+  }, [mounted, user, router]);
   const [formData, setFormData] = useState({
     title: "",
     body: "",
@@ -61,7 +71,7 @@ const AskQuestionIndex = () => {
       if (res.data.data) {
         toast.success("Question posted successfully!");
         fetchSubscription();
-        router.push("/");
+        router.push(`/questions/${res.data.data._id}`);
       }
     } catch (error: any) {
       console.log(error);
@@ -100,7 +110,7 @@ const AskQuestionIndex = () => {
           <h1 className="text-xl lg:text-2xl font-semibold">
             Ask a public question
           </h1>
-          {user && (
+          {mounted && user && (
             <div className="flex items-center gap-2 text-sm bg-orange-50 dark:bg-gray-800 p-2 rounded-lg border border-orange-200">
               <span className="font-medium text-gray-700 dark:text-gray-300">Plan:</span>
               <PlanBadge plan={currentPlan} size="sm" />
@@ -212,13 +222,15 @@ const AskQuestionIndex = () => {
           </Card>
         </form>
 
-        <LimitExceededModal
-          isOpen={limitModalOpen}
-          onClose={() => setLimitModalOpen(false)}
-          message={limitErrorMessage}
-          currentPlan={currentPlan}
-          limit={dailyQuestions?.limit || 1}
-        />
+        {mounted && (
+          <LimitExceededModal
+            isOpen={limitModalOpen}
+            onClose={() => setLimitModalOpen(false)}
+            message={limitErrorMessage}
+            currentPlan={currentPlan}
+            limit={dailyQuestions?.limit || 1}
+          />
+        )}
       </div>
     </Mainlayout>
   );

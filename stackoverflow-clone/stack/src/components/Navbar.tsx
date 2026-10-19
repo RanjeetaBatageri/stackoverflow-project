@@ -3,6 +3,7 @@ import { Menu, Search, Crown } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import PlanBadge from "./subscription/PlanBadge";
+import LanguageSelector from "./LanguageSelector";
 
 const Navbar = ({ handleslidein }: any) => {
   const { user, Logout } = useAuth();
@@ -61,6 +62,7 @@ const Navbar = ({ handleslidein }: any) => {
         </div>
 
         <div className="flex items-center gap-3">
+          <LanguageSelector />
           {!hasMounted ? null : !user ? (
             <Link
               href="/auth"

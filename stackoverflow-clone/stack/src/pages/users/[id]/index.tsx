@@ -17,6 +17,7 @@ import { useAuth } from "@/lib/AuthContext";
 import axiosInstance from "@/lib/axiosinstance";
 import PlanBadge from "@/components/subscription/PlanBadge";
 import SubscriptionDashboard from "@/components/subscription/SubscriptionDashboard";
+import ReputationSection from "@/components/reputation/ReputationSection";
 import { Calendar, Edit, Plus, X } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useEffect, useState } from "react";
@@ -29,13 +30,24 @@ const UserProfilePage = () => {
   const [users, setusers] = useState<any>(null);
   const [loading, setloading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"profile" | "subscription">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "subscription" | "reputation">("profile");
+
   const [editForm, setEditForm] = useState({
     name: "",
     about: "",
+    phone: "",
     tags: [] as string[],
   });
   const [newTag, setNewTag] = useState("");
+
+  const currentUserId = user?._id;
+  const isOwnProfile = id === currentUserId;
+
+  useEffect(() => {
+    if (isOwnProfile && user === null) {
+      window.location.href = "/auth";
+    }
+  }, [user, isOwnProfile]);
 
   useEffect(() => {
     const fetchuser = async () => {
@@ -47,6 +59,7 @@ const UserProfilePage = () => {
           setEditForm({
             name: matcheduser.name || "",
             about: matcheduser.about || "",
+            phone: matcheduser.phone || "",
             tags: matcheduser.tags || [],
           });
         }
@@ -87,6 +100,7 @@ const UserProfilePage = () => {
           ...users,
           name: editForm.name,
           about: editForm.about,
+          phone: editForm.phone,
           tags: editForm.tags,
         };
 
@@ -95,6 +109,7 @@ const UserProfilePage = () => {
         toast.success("Profile updated successfully!");
       }
     } catch (error) {
+
       console.log(error);
       toast.error("Something went wrong");
     }
@@ -114,9 +129,6 @@ const UserProfilePage = () => {
       tags: editForm.tags.filter((tag: any) => tag !== tagToRemove),
     });
   };
-
-  const currentUserId = user?._id;
-  const isOwnProfile = id === currentUserId;
 
   return (
     <Mainlayout>
@@ -179,8 +191,23 @@ const UserProfilePage = () => {
                               placeholder="Your display name"
                             />
                           </div>
+                          <div>
+                            <Label htmlFor="phone">Phone Number (Required for Non-French OTP)</Label>
+                            <Input
+                              id="phone"
+                              value={editForm.phone}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  phone: e.target.value,
+                                })
+                              }
+                              placeholder="+1234567890"
+                            />
+                          </div>
                         </div>
                       </div>
+
                       {/* About Section */}
                       <div className="space-y-4">
                         <h3 className="text-lg font-semibold">About</h3>
@@ -281,19 +308,29 @@ const UserProfilePage = () => {
           </div>
         </div>
 
-        {/* Tab Navigation for Own Profile */}
-        {isOwnProfile && (
-          <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6">
-            <button
-              onClick={() => setActiveTab("profile")}
-              className={`py-2 px-4 text-sm font-semibold border-b-2 transition-colors ${
-                activeTab === "profile"
-                  ? "border-orange-500 text-orange-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Profile Overview
-            </button>
+        {/* Tab Navigation for Profile */}
+        <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6">
+          <button
+            onClick={() => setActiveTab("profile")}
+            className={`py-2 px-4 text-sm font-semibold border-b-2 transition-colors ${
+              activeTab === "profile"
+                ? "border-orange-500 text-orange-600"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Profile Overview
+          </button>
+          <button
+            onClick={() => setActiveTab("reputation")}
+            className={`py-2 px-4 text-sm font-semibold border-b-2 transition-colors ${
+              activeTab === "reputation"
+                ? "border-orange-500 text-orange-600"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Reputation & Badges ({users.reputation || 0})
+          </button>
+          {isOwnProfile && (
             <button
               onClick={() => setActiveTab("subscription")}
               className={`py-2 px-4 text-sm font-semibold border-b-2 transition-colors ${
@@ -304,8 +341,8 @@ const UserProfilePage = () => {
             >
               Membership & Subscription
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Tab Content */}
         {activeTab === "profile" ? (
@@ -349,9 +386,16 @@ const UserProfilePage = () => {
               </Card>
             </div>
           </div>
+        ) : activeTab === "reputation" ? (
+          <ReputationSection
+            userId={users._id}
+            isOwnProfile={isOwnProfile}
+            userReputation={users.reputation || 0}
+          />
         ) : (
           <SubscriptionDashboard />
         )}
+
       </div>
     </Mainlayout>
   );

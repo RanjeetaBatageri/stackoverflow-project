@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 import question from "../models/question.js";
-import { checkAndIncrementQuestionLimit } from "../services/planPermissions.js";
+import {
+  checkQuestionLimit,
+  incrementQuestionLimit,
+} from "../services/planPermissions.js";
+import { adjustReputation } from "../services/reputation.js";
 
 export const Askquestion = async (req, res) => {
   const { postquestiondata } = req.body;
@@ -11,7 +15,7 @@ export const Askquestion = async (req, res) => {
   }
 
   try {
-    const limitCheck = await checkAndIncrementQuestionLimit(userId);
+    const limitCheck = await checkQuestionLimit(userId);
     if (!limitCheck.allowed) {
       return res.status(403).json({
         message: limitCheck.message,
@@ -25,7 +29,20 @@ export const Askquestion = async (req, res) => {
 
     const postques = new question({ ...postquestiondata, userid: userId });
     await postques.save();
-    res.status(200).json({ data: postques, usage: limitCheck });
+
+    await incrementQuestionLimit(userId);
+
+    res.status(200).json({
+      data: postques,
+      usage: {
+        ...limitCheck,
+        used: limitCheck.used + 1,
+        remaining:
+          limitCheck.limit === -1
+            ? "unlimited"
+            : Math.max(0, limitCheck.limit - (limitCheck.used + 1)),
+      },
+    });
   } catch (error) {
     console.log(error);
     res.status(500).json("something went wrong..");
@@ -42,6 +59,7 @@ export const getallquestion = async (req, res) => {
     return;
   }
 };
+
 export const deletequestion = async (req, res) => {
   const { id: _id } = req.params;
 
@@ -49,6 +67,25 @@ export const deletequestion = async (req, res) => {
     return res.status(400).json({ message: "question unavailable" });
   }
   try {
+    const ques = await question.findById(_id);
+    if (!ques) {
+      return res.status(404).json({ message: "question unavailable" });
+    }
+
+    const isOwner = String(ques.userid) === String(req.userid);
+    const isAdmin = req.currentUser?.role === "admin";
+
+    if (isAdmin && !isOwner) {
+      // Reputation Rule: -10 when admin removes content
+      await adjustReputation(
+        ques.userid,
+        -10,
+        "admin_removal_deduction",
+        `Admin removed question "${ques.questiontitle}"`,
+        String(ques._id)
+      );
+    }
+
     await question.findByIdAndDelete(_id);
     res.status(200).json({ message: "question deleted" });
   } catch (error) {
@@ -56,18 +93,28 @@ export const deletequestion = async (req, res) => {
     return;
   }
 };
+
 export const votequestion = async (req, res) => {
   const { id: _id } = req.params;
-  const { value ,userid} = req.body;
+  const { value, userid: bodyUserId } = req.body;
+  const userid = req.userid || bodyUserId;
+
   if (!mongoose.Types.ObjectId.isValid(_id)) {
     return res.status(400).json({ message: "question unavailable" });
   }
   try {
     const questionDoc = await question.findById(_id);
+    if (!questionDoc) {
+      return res.status(404).json({ message: "question unavailable" });
+    }
+
     const upindex = questionDoc.upvote.findIndex((id) => id === String(userid));
     const downindex = questionDoc.downvote.findIndex(
       (id) => id === String(userid)
     );
+
+    let isNewDownvote = false;
+
     if (value === "upvote") {
       if (downindex !== -1) {
         questionDoc.downvote = questionDoc.downvote.filter(
@@ -75,7 +122,7 @@ export const votequestion = async (req, res) => {
         );
       }
       if (upindex === -1) {
-        questionDoc.upvote.push(userid);
+        questionDoc.upvote.push(String(userid));
       } else {
         questionDoc.upvote = questionDoc.upvote.filter((id) => id !== String(userid));
       }
@@ -84,17 +131,84 @@ export const votequestion = async (req, res) => {
         questionDoc.upvote = questionDoc.upvote.filter((id) => id !== String(userid));
       }
       if (downindex === -1) {
-        questionDoc.downvote.push(userid);
+        questionDoc.downvote.push(String(userid));
+        isNewDownvote = true;
       } else {
         questionDoc.downvote = questionDoc.downvote.filter(
           (id) => id !== String(userid)
         );
       }
     }
-    const questionvote = await question.findByIdAndUpdate(_id, questionDoc, { new: true });
-    res.status(200).json({ data: questionvote });
+
+    await questionDoc.save();
+
+    // Reputation Rule: -2 per downvote (deducted from question author)
+    if (isNewDownvote && String(questionDoc.userid) !== String(userid)) {
+      await adjustReputation(
+        questionDoc.userid,
+        -2,
+        "downvote_deduction",
+        `Downvote received on question "${questionDoc.questiontitle}"`,
+        `${questionDoc._id}_downvote_${userid}`
+      );
+    }
+
+    // Reputation Rule: +2 when a question reaches 10 upvotes
+    if (questionDoc.upvote.length >= 10) {
+      await adjustReputation(
+        questionDoc.userid,
+        2,
+        "question_upvote_threshold",
+        `Question "${questionDoc.questiontitle}" reached 10 upvotes`,
+        String(questionDoc._id)
+      );
+    }
+
+    res.status(200).json({ data: questionDoc });
   } catch (error) {
+    console.log(error);
     res.status(500).json("something went wrong..");
     return;
+  }
+};
+
+export const acceptAnswer = async (req, res) => {
+  const { id: questionId, answerId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(questionId) || !mongoose.Types.ObjectId.isValid(answerId)) {
+    return res.status(400).json({ message: "Invalid question or answer ID" });
+  }
+
+  try {
+    const ques = await question.findById(questionId);
+    if (!ques) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    if (String(ques.userid) !== String(req.userid)) {
+      return res.status(403).json({ message: "Only question author can accept an answer" });
+    }
+
+    const targetAns = ques.answer.id(answerId);
+    if (!targetAns) {
+      return res.status(404).json({ message: "Answer not found" });
+    }
+
+    ques.acceptedAnswerId = String(answerId);
+    await ques.save();
+
+    // Reputation Rule: +10 when an answer is accepted
+    await adjustReputation(
+      targetAns.userid,
+      10,
+      "accepted_answer",
+      `Answer accepted for question "${ques.questiontitle}"`,
+      String(answerId)
+    );
+
+    res.status(200).json({ data: ques });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to accept answer" });
   }
 };

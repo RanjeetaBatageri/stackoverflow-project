@@ -19,5 +19,16 @@ const userschema = mongoose.Schema({
   subscriptionEndDate: { type: Date },
   dailyQuestionCount: { type: Number, default: 0 },
   lastQuestionDate: { type: Date },
+  phone: { type: String },
+  lastPasswordResetDate: { type: Date },
+  followers: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], default: [] },
+  following: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }], default: [] },
+  role: { type: String, enum: ["user", "admin"], default: "user" },
+  isSuspended: { type: Boolean, default: false },
+  preferredLanguage: { type: String, default: "en" },
+  reputation: { type: Number, default: 0 },
+  profileBonusAwarded: { type: Boolean, default: false },
+  dailyReputationTransferred: { type: Number, default: 0 },
+  lastTransferDate: { type: Date },
 });
 export default mongoose.model("user", userschema);
