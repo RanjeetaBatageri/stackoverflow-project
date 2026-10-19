@@ -12,24 +12,38 @@ dotenv.config();
 
 const app = express();
 
-app.use(express.json({ limit: "30mb", extended: true }));
-app.use(express.urlencoded({ limit: "30mb", extended: true }));
-const allowedOrigins = process.env.FRONTEND_URL
-  ? [process.env.FRONTEND_URL, "http://localhost:3000"]
-  : ["http://localhost:3000"];
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://stackoverflow-project-eosin.vercel.app",
+  "http://localhost:3000",
+];
+
+const envFrontend = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/+$/, "") : null;
+const allowedOrigins = envFrontend
+  ? Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, envFrontend]))
+  : DEFAULT_ALLOWED_ORIGINS;
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (e.g. mobile apps, curl, server-to-server) or matching allowed list
-    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== "production") {
+    // Normalize incoming origin by removing trailing slashes if present
+    const normalizedOrigin = origin ? origin.replace(/\/+$/, "") : origin;
+    if (!normalizedOrigin || allowedOrigins.includes(normalizedOrigin) || process.env.NODE_ENV !== "production") {
       callback(null, true);
     } else {
       callback(new Error(`CORS origin ${origin} not allowed`));
     }
   },
   credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "device-fingerprint"],
 };
+
 app.use(cors(corsOptions));
+app.options(/(.*)/, cors(corsOptions));
+
+app.use(express.json({ limit: "30mb", extended: true }));
+app.use(express.urlencoded({ limit: "30mb", extended: true }));
+
 
 
 app.get("/", (req, res) => {
